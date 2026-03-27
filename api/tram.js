@@ -14,7 +14,7 @@ module.exports = async function handler(req, res) {
     }
 
     // ? IMPORTANT: devid must be inside the signed string
-    const endpoint = `/v3/departures/route_type/1/stop/${stopId}?devid=${devId}`;
+    const endpoint = `/v3/departures/route_type/1/stop/${stopId}?max_results=5&devid=${devId}`;
 
     const signature = crypto
       .createHmac("sha1", apiKey)
