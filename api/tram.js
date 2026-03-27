@@ -43,7 +43,6 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // ? Map departures with proper names
 const trams = (data.departures || []).slice(0, 5).map(dep => {
   const departureTime = new Date(
     dep.estimated_departure_utc || dep.scheduled_departure_utc
@@ -51,8 +50,21 @@ const trams = (data.departures || []).slice(0, 5).map(dep => {
 
   const minutes = Math.round((departureTime - new Date()) / 60000);
 
-  const route = data.routes?.[dep.route_id];
-  const direction = data.directions?.[dep.direction_id];
+  // ? handle routes as array OR object
+  let route;
+  if (Array.isArray(data.routes)) {
+    route = data.routes.find(r => r.route_id === dep.route_id);
+  } else {
+    route = data.routes?.[dep.route_id];
+  }
+
+  // ? handle directions as array OR object
+  let direction;
+  if (Array.isArray(data.directions)) {
+    direction = data.directions.find(d => d.direction_id === dep.direction_id);
+  } else {
+    direction = data.directions?.[dep.direction_id];
+  }
 
   return {
     line: route?.route_name || dep.route_id,
@@ -60,7 +72,6 @@ const trams = (data.departures || []).slice(0, 5).map(dep => {
     eta: minutes <= 0 ? "Now" : `${minutes} min`
   };
 });
-
 
     return res.status(200).json({
       stopId,
