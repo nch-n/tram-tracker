@@ -153,25 +153,14 @@ module.exports = async function handler(req, res) {
       }
     }).filter(Boolean);
 
-    return res.status(200).json({
-      stopId,
-      tramCount: trams.length,
-      trams
-    });
 
-  } catch (err) {
-    console.error("SERVER ERROR:", err);
-    return res.status(500).json({
-      error: err.message
-    });
-  }
-};
 return res.status(200).json({
   title: "?? Next Tram",
   items: trams.map((t, i) => ({
-    title: i === 0 ? `?? ${t.line}  ${t.destination}` : `${t.line}  ${t.destination}`,
+    title: i === 0
+      ? `?? ${t.line}  ${t.destination}`
+      : `${t.line}  ${t.destination}`,
     subtitle: i === 0 ? "Leaving soon" : "",
-    right: t.eta,
-    emphasis: i === 0 ? "high" : "low"
+    right: t.eta
   }))
 });
