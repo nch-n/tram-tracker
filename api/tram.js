@@ -1,6 +1,6 @@
 const crypto = require("crypto");
 
-// ?? caches (persist briefly on Vercel)
+// caches
 const routeCache = {};
 const directionCache = {};
 
@@ -11,7 +11,6 @@ async function fetchRoute(routeId, devId, apiKey) {
   if (routeCache[routeId]) return routeCache[routeId];
 
   const endpoint = `/v3/routes/${routeId}?devid=${devId}`;
-
   const signature = crypto
     .createHmac("sha1", apiKey)
     .update(endpoint)
@@ -22,10 +21,9 @@ async function fetchRoute(routeId, devId, apiKey) {
   try {
     const res = await fetch(url);
     const data = await res.json();
-
     const route = data?.route || null;
-    routeCache[routeId] = route;
 
+    routeCache[routeId] = route;
     return route;
   } catch (err) {
     console.error("Route fetch error:", err);
@@ -40,7 +38,6 @@ async function fetchDirections(routeId, devId, apiKey) {
   if (directionCache[routeId]) return directionCache[routeId];
 
   const endpoint = `/v3/directions/route/${routeId}?route_type=1&devid=${devId}`;
-
   const signature = crypto
     .createHmac("sha1", apiKey)
     .update(endpoint)
@@ -51,10 +48,9 @@ async function fetchDirections(routeId, devId, apiKey) {
   try {
     const res = await fetch(url);
     const data = await res.json();
-
     const directions = data?.directions || [];
-    directionCache[routeId] = directions;
 
+    directionCache[routeId] = directions;
     return directions;
   } catch (err) {
     console.error("Direction fetch error:", err);
@@ -67,16 +63,19 @@ async function fetchDirections(routeId, devId, apiKey) {
 // --------------------
 module.exports = async function handler(req, res) {
   try {
+    res.setHeader("Content-Type", "application/json");
+
     const stopId = req.query.stop || "3148";
 
     const devId = process.env.PTV_DEV_ID;
     const apiKey = process.env.PTV_API_KEY;
 
     if (!devId || !apiKey) {
-      return res.status(500).json({ error: "Missing API keys" });
+      return res.status(200).json({
+        items: [{ title: "Missing API keys" }]
+      });
     }
 
-    // ? departures
     const endpoint = `/v3/departures/route_type/1/stop/${stopId}?max_results=5&expand=run&devid=${devId}`;
 
     const signature = crypto
@@ -93,13 +92,11 @@ module.exports = async function handler(req, res) {
       ? data.departures
       : [];
 
-    // ?? unique route IDs
     const routeIds = [...new Set(departures.map(d => d.route_id))];
 
     const routeMap = {};
     const directionMap = {};
 
-    // ?? fetch route + direction data
     await Promise.all(
       routeIds.map(async routeId => {
         const [route, directions] = await Promise.all([
@@ -112,7 +109,6 @@ module.exports = async function handler(req, res) {
       })
     );
 
-    // ?? build tram list
     const trams = departures.slice(0, 5).map(dep => {
       const departureTime = new Date(
         dep.estimated_departure_utc || dep.scheduled_departure_utc
@@ -133,14 +129,12 @@ module.exports = async function handler(req, res) {
 
       let destination = direction?.direction_name || "Unknown";
 
-      // ? clean destination
       destination = destination
         .replace(" Railway Station", "")
         .replace(" Street", " St")
         .replace(" Avenue", " Ave")
         .trim();
 
-      // ? nicer ETA labels
       let eta = `${minutes} min`;
       if (minutes <= 0) eta = "Now";
       else if (minutes <= 1) eta = "?? Now";
@@ -149,22 +143,20 @@ module.exports = async function handler(req, res) {
       return { line, destination, eta };
     });
 
-    // ?? TRMNL DISPLAY FORMAT
-const crypto = require("crypto");
-
-module.exports = async function handler(req, res) {
-  try {
-    // ?? Always return valid JSON
-    res.setHeader("Content-Type", "application/json");
-
+    // ? TRMNL SAFE OUTPUT
     return res.status(200).json({
-      items: [
-        { title: "?? Test tram 1", right: "1 min" },
-        { title: "?? Test tram 2", right: "5 min" }
-      ]
+      items: trams.map((t, i) => ({
+        title:
+          i === 0
+            ? `?? ${t.line} ${t.destination}`
+            : `${t.line} ${t.destination}`,
+        right: t.eta
+      }))
     });
 
   } catch (err) {
+    console.error("SERVER ERROR:", err);
+
     return res.status(200).json({
       items: [{ title: "Error loading trams" }]
     });
