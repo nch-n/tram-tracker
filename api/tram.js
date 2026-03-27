@@ -137,10 +137,16 @@ module.exports = async function handler(req, res) {
 
       let eta = `${minutes} min`;
       if (minutes <= 0) eta = "Now";
-      else if (minutes <= 1) eta = "?? Now";
+      else if (minutes <= 1) eta = "Now";
       else if (minutes <= 3) eta = "Soon";
 
-      return { line, destination, eta };
+return {
+  line,
+  destination,
+  eta,
+  directionId: dep.direction_id
+};
+
     });
 
     // ? TRMNL SAFE OUTPUT
