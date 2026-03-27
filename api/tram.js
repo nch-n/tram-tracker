@@ -2,19 +2,18 @@ const crypto = require("crypto");
 
 module.exports = async function handler(req, res) {
   try {
-    // ?? your tram stop (Boundary Rd x Racecourse Rd)
+    // ?? Your default stop (Boundary Rd x Racecourse Rd)
     const stopId = req.query.stop || "1322";
 
     const devId = process.env.PTV_DEV_ID;
     const apiKey = process.env.PTV_API_KEY;
 
-    // ? Check env vars exist
     if (!devId || !apiKey) {
       return res.status(500).json({ error: "Missing API keys" });
     }
 
-    // ? IMPORTANT: devid must be inside the signed string
-    const endpoint = `/v3/departures/route_type/0/stop/${stopId}?expand=all&max_results=5&devid=${devId}`;
+    // ? NOTE: route_type=0 (PTV quirk Ñ this is correct)
+    const endpoint = `/v3/departures/route_type/0/stop/${stopId}?max_results=5&devid=${devId}`;
 
     const signature = crypto
       .createHmac("sha1", apiKey)
@@ -24,10 +23,8 @@ module.exports = async function handler(req, res) {
     const url = `https://timetableapi.ptv.vic.gov.au${endpoint}&signature=${signature}`;
 
     const response = await fetch(url);
-
     const text = await response.text();
 
-    // ? Safe JSON parse (prevents crashes)
     let data;
     try {
       data = JSON.parse(text);
@@ -39,7 +36,6 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // ? Handle API errors properly
     if (!response.ok) {
       return res.status(500).json({
         error: "PTV API error",
@@ -47,7 +43,7 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // ? Map departures safely
+    // ? Map departures with proper names
     const trams = (data.departures || []).slice(0, 5).map(dep => {
       const departureTime = new Date(
         dep.estimated_departure_utc || dep.scheduled_departure_utc
@@ -55,9 +51,12 @@ module.exports = async function handler(req, res) {
 
       const minutes = Math.round((departureTime - new Date()) / 60000);
 
+      const route = data.routes?.[dep.route_id];
+      const direction = data.directions?.[dep.direction_id];
+
       return {
-        line: dep.route_id,
-        destination: `Direction ${dep.direction_id}`,
+        line: route?.route_name || dep.route_id,
+        destination: direction?.direction_name || "Unknown",
         eta: minutes <= 0 ? "Now" : `${minutes} min`
       };
     });
