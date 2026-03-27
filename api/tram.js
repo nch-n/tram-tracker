@@ -1,9 +1,10 @@
 const crypto = require("crypto");
 
-// simple in-memory cache (persists across Vercel invocations briefly)
+// ?? in-memory cache (persists across warm invocations)
 const routeCache = {};
 
-async function getRoute(routeId, devId, apiKey) {
+async function fetchRoute(routeId, devId, apiKey) {
+  // return cached if exists
   if (routeCache[routeId]) return routeCache[routeId];
 
   const endpoint = `/v3/routes/${routeId}?devid=${devId}`;
@@ -15,14 +16,19 @@ async function getRoute(routeId, devId, apiKey) {
 
   const url = `https://timetableapi.ptv.vic.gov.au${endpoint}&signature=${signature}`;
 
-  const res = await fetch(url);
-  const data = await res.json();
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
 
-  const routeNumber = data?.route?.route_number;
+    const route = data?.route || null;
 
-  routeCache[routeId] = routeNumber;
+    routeCache[routeId] = route;
+    return route;
 
-  return routeNumber;
+  } catch (err) {
+    console.error("Route fetch error:", err);
+    return null;
+  }
 }
 
 module.exports = async function handler(req, res) {
@@ -36,6 +42,7 @@ module.exports = async function handler(req, res) {
       return res.status(500).json({ error: "Missing API keys" });
     }
 
+    // ? departures call (with runs)
     const endpoint = `/v3/departures/route_type/1/stop/${stopId}?max_results=5&expand=run&devid=${devId}`;
 
     const signature = crypto
@@ -52,56 +59,88 @@ module.exports = async function handler(req, res) {
       ? data.departures
       : [];
 
-    const trams = await Promise.all(
-      departures.slice(0, 5).map(async dep => {
-        try {
-          const departureTime = new Date(
-            dep.estimated_departure_utc || dep.scheduled_departure_utc
-          );
+    // ?? STEP 1: collect unique route_ids
+    const routeIds = [
+      ...new Set(departures.map(d => d.route_id))
+    ];
 
-          const minutes = Math.round(
-            (departureTime - new Date()) / 60000
-          );
+    // ?? STEP 2: resolve routes (from API OR cache)
+    const routeMap = {};
 
-          // ? REAL route lookup
-          const line =
-            (await getRoute(dep.route_id, devId, apiKey)) ||
-            dep.route_id;
+    await Promise.all(
+      routeIds.map(async routeId => {
+        // try departures data first
+        let route = null;
 
-          // ? destination from runs
-          const run =
-            data.runs?.[dep.run_id] ||
-            data.runs?.[String(dep.run_id)];
+        if (data.routes) {
+          const routesArray = Array.isArray(data.routes)
+            ? data.routes
+            : Object.values(data.routes);
 
-          let destination = run?.destination_name || "Unknown";
-
-          if (typeof destination === "string") {
-            destination = destination
-              .split("/")[0]
-              .replace(/#\d+/, "")
-              .replace(" Railway Station", "")
-              .replace(" Street", " St")
-              .replace(" Avenue", " Ave")
-              .trim();
-          }
-
-          return {
-            line,
-            destination,
-            eta: minutes <= 0 ? "Now" : `${minutes} min`
-          };
-
-        } catch (err) {
-          console.error("Mapping error:", err);
-          return null;
+          route = routesArray.find(r => r.route_id === routeId);
         }
+
+        // fallback to API if missing
+        if (!route) {
+          route = await fetchRoute(routeId, devId, apiKey);
+        }
+
+        routeMap[routeId] = route;
       })
     );
 
+    // ?? STEP 3: build response
+    const trams = departures.slice(0, 5).map(dep => {
+      try {
+        const departureTime = new Date(
+          dep.estimated_departure_utc || dep.scheduled_departure_utc
+        );
+
+        const minutes = Math.round(
+          (departureTime - new Date()) / 60000
+        );
+
+        const route = routeMap[dep.route_id];
+
+        const line = route?.route_number || dep.route_id;
+
+        // ? direction-aware destination from route_name
+        let destination = "Unknown";
+
+        if (route?.route_name) {
+          const parts = route.route_name.split(" - ");
+
+          if (parts.length === 2) {
+            destination =
+              dep.direction_id === 0
+                ? parts[1]
+                : parts[0];
+          }
+        }
+
+        // ? clean text
+        destination = destination
+          .replace(" Railway Station", "")
+          .replace(" Street", " St")
+          .replace(" Avenue", " Ave")
+          .trim();
+
+        return {
+          line,
+          destination,
+          eta: minutes <= 0 ? "Now" : `${minutes} min`
+        };
+
+      } catch (err) {
+        console.error("Mapping error:", err);
+        return null;
+      }
+    }).filter(Boolean);
+
     return res.status(200).json({
       stopId,
-      tramCount: trams.filter(Boolean).length,
-      trams: trams.filter(Boolean)
+      tramCount: trams.length,
+      trams
     });
 
   } catch (err) {
