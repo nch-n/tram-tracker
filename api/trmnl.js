@@ -7,15 +7,15 @@ module.exports = async function handler(req, res) {
   if (query.redirect_uri) {
     const redirectUrl = new URL(query.redirect_uri);
 
-    // fake install data
-    redirectUrl.searchParams.set("external_user_id", "tram-user");
-    redirectUrl.searchParams.set("access_token", "tram-token");
+    // ? REQUIRED fields for TRMNL
+    redirectUrl.searchParams.set("external_user_id", "tram-user-1");
+    redirectUrl.searchParams.set("api_key", "tram-demo-key");
 
     return res.redirect(redirectUrl.toString());
   }
 
   // ------------------------
-  // WEBHOOK (POST)
+  // WEBHOOK
   // ------------------------
   if (method === "POST") {
     return res.status(200).json({ success: true });
@@ -29,8 +29,8 @@ module.exports = async function handler(req, res) {
   return res.send(`
     <html>
       <body style="font-family: sans-serif; padding: 20px;">
-        <h1>?? Tram Tracker Plugin</h1>
-        <p>Your plugin is installed and working.</p>
+        <h1>?? Tram Tracker</h1>
+        <p>Plugin installed successfully.</p>
       </body>
     </html>
   `);
