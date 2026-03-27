@@ -107,20 +107,29 @@ module.exports = async function handler(req, res) {
         // ? direction-aware destination from route_name
 let destination = "Unknown";
 
-if (route?.route_name) {
+const run =
+  data.runs?.[dep.run_id] ||
+  data.runs?.[String(dep.run_id)];
+
+if (route?.route_name && run?.destination_name) {
   const parts = route.route_name.split(" - ");
 
   if (parts.length === 2) {
     const [endA, endB] = parts;
 
-    // ? handle direction_id safely
-    if (dep.direction_id === 0) {
+    const runDest = run.destination_name.toLowerCase();
+
+    // ? map run destination to closest terminus
+    const score = str => runDest.includes(str.toLowerCase());
+
+    if (score(endA) && !score(endB)) {
+      destination = endA;
+    } else if (score(endB) && !score(endA)) {
       destination = endB;
-    } else if (dep.direction_id === 1) {
-      destination = endA;
     } else {
-      // fallback if weird direction_id
-      destination = endA;
+      // ?? fallback: use direction_id ONLY as tie-breaker
+      destination =
+        dep.direction_id === 0 ? endB : endA;
     }
   }
 }
