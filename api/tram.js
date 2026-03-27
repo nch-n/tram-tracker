@@ -58,7 +58,11 @@ const trams = (data.departures || []).slice(0, 5).map(dep => {
     route = data.routes?.[dep.route_id];
   }
 
-  const line = route?.route_number || dep.route_id;
+const route =
+  data.routes?.[dep.route_id] ||
+  data.routes?.[String(dep.route_id)];
+
+const line = route?.route_number || dep.route_id;
 
   // ? destination from runs (already working)
   const run = data.runs?.[dep.run_id];
