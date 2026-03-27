@@ -1,10 +1,13 @@
 const crypto = require("crypto");
 
-// ?? in-memory cache (persists across warm invocations)
+// ?? caches (persist briefly on Vercel)
 const routeCache = {};
+const directionCache = {};
 
+// --------------------
+// FETCH ROUTE
+// --------------------
 async function fetchRoute(routeId, devId, apiKey) {
-  // return cached if exists
   if (routeCache[routeId]) return routeCache[routeId];
 
   const endpoint = `/v3/routes/${routeId}?devid=${devId}`;
@@ -21,16 +24,47 @@ async function fetchRoute(routeId, devId, apiKey) {
     const data = await res.json();
 
     const route = data?.route || null;
-
     routeCache[routeId] = route;
-    return route;
 
+    return route;
   } catch (err) {
     console.error("Route fetch error:", err);
     return null;
   }
 }
 
+// --------------------
+// FETCH DIRECTIONS
+// --------------------
+async function fetchDirections(routeId, devId, apiKey) {
+  if (directionCache[routeId]) return directionCache[routeId];
+
+  const endpoint = `/v3/directions/route/${routeId}?route_type=1&devid=${devId}`;
+
+  const signature = crypto
+    .createHmac("sha1", apiKey)
+    .update(endpoint)
+    .digest("hex");
+
+  const url = `https://timetableapi.ptv.vic.gov.au${endpoint}&signature=${signature}`;
+
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+
+    const directions = data?.directions || [];
+    directionCache[routeId] = directions;
+
+    return directions;
+  } catch (err) {
+    console.error("Direction fetch error:", err);
+    return [];
+  }
+}
+
+// --------------------
+// MAIN HANDLER
+// --------------------
 module.exports = async function handler(req, res) {
   try {
     const stopId = req.query.stop || "3148";
@@ -42,7 +76,7 @@ module.exports = async function handler(req, res) {
       return res.status(500).json({ error: "Missing API keys" });
     }
 
-    // ? departures call (with runs)
+    // ? Get departures
     const endpoint = `/v3/departures/route_type/1/stop/${stopId}?max_results=5&expand=run&devid=${devId}`;
 
     const signature = crypto
@@ -59,37 +93,26 @@ module.exports = async function handler(req, res) {
       ? data.departures
       : [];
 
-    // ?? STEP 1: collect unique route_ids
-    const routeIds = [
-      ...new Set(departures.map(d => d.route_id))
-    ];
+    // ?? unique route IDs
+    const routeIds = [...new Set(departures.map(d => d.route_id))];
 
-    // ?? STEP 2: resolve routes (from API OR cache)
+    // ?? fetch all route + direction data in parallel
     const routeMap = {};
+    const directionMap = {};
 
     await Promise.all(
       routeIds.map(async routeId => {
-        // try departures data first
-        let route = null;
-
-        if (data.routes) {
-          const routesArray = Array.isArray(data.routes)
-            ? data.routes
-            : Object.values(data.routes);
-
-          route = routesArray.find(r => r.route_id === routeId);
-        }
-
-        // fallback to API if missing
-        if (!route) {
-          route = await fetchRoute(routeId, devId, apiKey);
-        }
+        const [route, directions] = await Promise.all([
+          fetchRoute(routeId, devId, apiKey),
+          fetchDirections(routeId, devId, apiKey)
+        ]);
 
         routeMap[routeId] = route;
+        directionMap[routeId] = directions;
       })
     );
 
-    // ?? STEP 3: build response
+    // ?? build response
     const trams = departures.slice(0, 5).map(dep => {
       try {
         const departureTime = new Date(
@@ -101,38 +124,16 @@ module.exports = async function handler(req, res) {
         );
 
         const route = routeMap[dep.route_id];
+        const directions = directionMap[dep.route_id] || [];
+
+        const direction = directions.find(
+          d => d.direction_id === dep.direction_id
+        );
 
         const line = route?.route_number || dep.route_id;
 
-        // ? direction-aware destination from route_name
-let destination = "Unknown";
+        let destination = direction?.direction_name || "Unknown";
 
-const run =
-  data.runs?.[dep.run_id] ||
-  data.runs?.[String(dep.run_id)];
-
-if (route?.route_name && run?.destination_name) {
-  const parts = route.route_name.split(" - ");
-
-  if (parts.length === 2) {
-    const [endA, endB] = parts;
-
-    const runDest = run.destination_name.toLowerCase();
-
-    // ? map run destination to closest terminus
-    const score = str => runDest.includes(str.toLowerCase());
-
-    if (score(endA) && !score(endB)) {
-      destination = endA;
-    } else if (score(endB) && !score(endA)) {
-      destination = endB;
-    } else {
-      // ?? fallback: use direction_id ONLY as tie-breaker
-      destination =
-        dep.direction_id === 0 ? endB : endA;
-    }
-  }
-}
         // ? clean text
         destination = destination
           .replace(" Railway Station", "")
