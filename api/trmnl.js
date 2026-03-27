@@ -2,12 +2,12 @@ module.exports = async function handler(req, res) {
   const { method, query } = req;
 
   // ------------------------
-  // INSTALL FLOW
+  // INSTALL FLOW (CORRECT)
   // ------------------------
-  if (query.redirect_uri) {
-    const redirectUrl = new URL(query.redirect_uri);
+  if (query.installation_callback_url) {
+    const redirectUrl = new URL(query.installation_callback_url);
 
-    // ? REQUIRED fields for TRMNL
+    // REQUIRED params
     redirectUrl.searchParams.set("external_user_id", "tram-user-1");
     redirectUrl.searchParams.set("api_key", "tram-demo-key");
 
