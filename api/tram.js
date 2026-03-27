@@ -107,30 +107,23 @@ module.exports = async function handler(req, res) {
         // ? direction-aware destination from route_name
 let destination = "Unknown";
 
-const run =
-  data.runs?.[dep.run_id] ||
-  data.runs?.[String(dep.run_id)];
+// ? get direction info properly
+let direction = null;
 
-if (route?.route_name && run?.destination_name) {
-  const parts = route.route_name.split(" - ");
+if (data.directions) {
+  const directionsArray = Array.isArray(data.directions)
+    ? data.directions
+    : Object.values(data.directions);
 
-  if (parts.length === 2) {
-    const [endA, endB] = parts;
-
-    const runDest = run.destination_name.toLowerCase();
-
-    // ?? match which terminus the run is heading toward
-    if (runDest.includes(endA.toLowerCase())) {
-      destination = endA;
-    } else if (runDest.includes(endB.toLowerCase())) {
-      destination = endB;
-    } else {
-      // fallback if matching fails
-      destination = endA;
-    }
-  }
+  direction = directionsArray.find(
+    d => d.direction_id === dep.direction_id
+  );
 }
 
+// ? use real direction name
+if (direction?.direction_name) {
+  destination = direction.direction_name;
+}
         // ? clean text
         destination = destination
           .replace(" Railway Station", "")
