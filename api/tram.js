@@ -2,7 +2,7 @@ const crypto = require("crypto");
 
 module.exports = async function handler(req, res) {
   try {
-    // ?? Your default stop (Boundary Rd x Racecourse Rd)
+    // ?? pass ?stop=XXXX or default
     const stopId = req.query.stop || "1322";
 
     const devId = process.env.PTV_DEV_ID;
@@ -12,7 +12,7 @@ module.exports = async function handler(req, res) {
       return res.status(500).json({ error: "Missing API keys" });
     }
 
-    // ? NOTE: route_type=0 (PTV quirk Ñ this is correct)
+    // ? route_type=0 (PTV quirk but works)
     const endpoint = `/v3/departures/route_type/0/stop/${stopId}?max_results=5&devid=${devId}`;
 
     const signature = crypto
@@ -43,35 +43,43 @@ module.exports = async function handler(req, res) {
       });
     }
 
-const trams = (data.departures || []).slice(0, 5).map(dep => {
-  const departureTime = new Date(
-    dep.estimated_departure_utc || dep.scheduled_departure_utc
-  );
+    const trams = (data.departures || []).slice(0, 5).map(dep => {
+      const departureTime = new Date(
+        dep.estimated_departure_utc || dep.scheduled_departure_utc
+      );
 
-  const minutes = Math.round((departureTime - new Date()) / 60000);
+      const minutes = Math.round((departureTime - new Date()) / 60000);
 
-  // ? handle routes as array OR object
-  let route;
-  if (Array.isArray(data.routes)) {
-    route = data.routes.find(r => r.route_id === dep.route_id);
-  } else {
-    route = data.routes?.[dep.route_id];
-  }
+      // ? get route (handles array or object)
+      let route;
+      if (Array.isArray(data.routes)) {
+        route = data.routes.find(r => r.route_id === dep.route_id);
+      } else {
+        route = data.routes?.[dep.route_id];
+      }
 
-  // ? handle directions as array OR object
-  let direction;
-  if (Array.isArray(data.directions)) {
-    direction = data.directions.find(d => d.direction_id === dep.direction_id);
-  } else {
-    direction = data.directions?.[dep.direction_id];
-  }
+      const routeNumber = route?.route_number || dep.route_id;
 
-  return {
-    line: route?.route_name || dep.route_id,
-    destination: direction?.direction_name || `Direction ${dep.direction_id}`,
-    eta: minutes <= 0 ? "Now" : `${minutes} min`
-  };
-});
+      // ? direction-aware destination (NO hardcoding)
+      let destination = `Direction ${dep.direction_id}`;
+
+      if (route?.route_name) {
+        const parts = route.route_name.split(" - ");
+
+        if (parts.length === 2) {
+          destination =
+            dep.direction_id === 0
+              ? parts[1] // inbound
+              : parts[0]; // outbound
+        }
+      }
+
+      return {
+        line: routeNumber,
+        destination,
+        eta: minutes <= 0 ? "Now" : `${minutes} min`
+      };
+    });
 
     return res.status(200).json({
       stopId,
