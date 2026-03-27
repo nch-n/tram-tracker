@@ -11,7 +11,7 @@ module.exports = async function handler(req, res) {
       return res.status(500).json({ error: "Missing API keys" });
     }
 
-    // ? Correct tram route_type + expand runs for destination
+    // ? Correct endpoint for trams + include run data
     const endpoint = `/v3/departures/route_type/1/stop/${stopId}?max_results=5&expand=run&devid=${devId}`;
 
     const signature = crypto
@@ -28,7 +28,7 @@ module.exports = async function handler(req, res) {
     try {
       data = JSON.parse(text);
     } catch (e) {
-      console.error("PTV NON JSON:", text);
+      console.error("Invalid JSON:", text);
       return res.status(500).json({
         error: "Invalid JSON from PTV",
         raw: text
@@ -48,6 +48,7 @@ module.exports = async function handler(req, res) {
 
     const trams = departures.slice(0, 5).map(dep => {
       try {
+        // ? ETA
         const departureTime = new Date(
           dep.estimated_departure_utc || dep.scheduled_departure_utc
         );
@@ -56,25 +57,25 @@ module.exports = async function handler(req, res) {
           (departureTime - new Date()) / 60000
         );
 
-        // ? SAFE route lookup (handles string/number keys)
+        // ? ROUTE LOOKUP (fix for 887 ? 57)
         const route =
           data.routes?.[dep.route_id] ||
           data.routes?.[String(dep.route_id)];
 
         const line = route?.route_number || dep.route_id;
 
-        // ? SAFE run lookup
+        // ? DESTINATION FROM RUNS
         const run =
           data.runs?.[dep.run_id] ||
           data.runs?.[String(dep.run_id)];
 
         let destination = run?.destination_name || "Unknown";
 
-        // ? Clean destination text
-        if (destination && typeof destination === "string") {
+        // ? CLEAN DESTINATION TEXT
+        if (typeof destination === "string") {
           destination = destination
-            .split("/")[0]
-            .replace(/#\d+/, "")
+            .split("/")[0]          // remove cross street
+            .replace(/#\d+/, "")   // remove stop number
             .replace(" Railway Station", "")
             .replace(" Street", " St")
             .replace(" Avenue", " Ave")
@@ -86,8 +87,9 @@ module.exports = async function handler(req, res) {
           destination,
           eta: minutes <= 0 ? "Now" : `${minutes} min`
         };
-      } catch (innerErr) {
-        console.error("Mapping error:", innerErr);
+
+      } catch (err) {
+        console.error("Mapping error:", err);
         return null;
       }
     }).filter(Boolean);
