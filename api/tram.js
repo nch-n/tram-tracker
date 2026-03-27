@@ -150,17 +150,15 @@ module.exports = async function handler(req, res) {
     });
 
     // ?? TRMNL DISPLAY FORMAT
-    return res.status(200).json({
-      title: "?? Next Tram",
-      items: trams.map((t, i) => ({
-        title:
-          i === 0
-            ? `?? ${t.line}  ${t.destination}`
-            : `${t.line}  ${t.destination}`,
-        subtitle: i === 0 ? "Leaving soon" : "",
-        right: t.eta
-      }))
-    });
+return res.status(200).json({
+  items: trams.map((t, i) => ({
+    title:
+      i === 0
+        ? `?? ${t.line} ${t.destination}`
+        : `${t.line} ${t.destination}`,
+    right: t.eta
+  }))
+});
 
   } catch (err) {
     console.error("SERVER ERROR:", err);
