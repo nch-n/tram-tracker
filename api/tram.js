@@ -150,17 +150,23 @@ module.exports = async function handler(req, res) {
     });
 
     // ?? TRMNL DISPLAY FORMAT
-return res.status(200).json({
-  items: [
-    { title: "Test tram 1" },
-    { title: "Test tram 2" }
-  ]
-});
+const crypto = require("crypto");
+
+module.exports = async function handler(req, res) {
+  try {
+    // ?? Always return valid JSON
+    res.setHeader("Content-Type", "application/json");
+
+    return res.status(200).json({
+      items: [
+        { title: "?? Test tram 1", right: "1 min" },
+        { title: "?? Test tram 2", right: "5 min" }
+      ]
+    });
 
   } catch (err) {
-    console.error("SERVER ERROR:", err);
-    return res.status(500).json({
-      error: err.message
+    return res.status(200).json({
+      items: [{ title: "Error loading trams" }]
     });
   }
 };
