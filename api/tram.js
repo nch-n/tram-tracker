@@ -51,15 +51,8 @@ const trams = (data.departures || []).slice(0, 5).map(dep => {
 
   const minutes = Math.round((departureTime - new Date()) / 60000);
 
-  // ? Find matching route
-  const route = Object.values(data.routes || {}).find(
-    r => r.route_id === dep.route_id
-  );
-
-  // ? Find matching direction
-  const direction = (data.directions || []).find(
-    d => d.direction_id === dep.direction_id
-  );
+  const route = data.routes?.[dep.route_id];
+  const direction = data.directions?.[dep.direction_id];
 
   return {
     line: route?.route_name || dep.route_id,
@@ -67,6 +60,7 @@ const trams = (data.departures || []).slice(0, 5).map(dep => {
     eta: minutes <= 0 ? "Now" : `${minutes} min`
   };
 });
+
 
     return res.status(200).json({
       stopId,
