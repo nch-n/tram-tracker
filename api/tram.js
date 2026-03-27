@@ -44,22 +44,29 @@ module.exports = async function handler(req, res) {
     }
 
     // ? Map departures with proper names
-    const trams = (data.departures || []).slice(0, 5).map(dep => {
-      const departureTime = new Date(
-        dep.estimated_departure_utc || dep.scheduled_departure_utc
-      );
+const trams = (data.departures || []).slice(0, 5).map(dep => {
+  const departureTime = new Date(
+    dep.estimated_departure_utc || dep.scheduled_departure_utc
+  );
 
-      const minutes = Math.round((departureTime - new Date()) / 60000);
+  const minutes = Math.round((departureTime - new Date()) / 60000);
 
-      const route = data.routes?.[dep.route_id];
-      const direction = data.directions?.[dep.direction_id];
+  // ? Find matching route
+  const route = Object.values(data.routes || {}).find(
+    r => r.route_id === dep.route_id
+  );
 
-      return {
-        line: route?.route_name || dep.route_id,
-        destination: direction?.direction_name || "Unknown",
-        eta: minutes <= 0 ? "Now" : `${minutes} min`
-      };
-    });
+  // ? Find matching direction
+  const direction = (data.directions || []).find(
+    d => d.direction_id === dep.direction_id
+  );
+
+  return {
+    line: route?.route_name || dep.route_id,
+    destination: direction?.direction_name || `Direction ${dep.direction_id}`,
+    eta: minutes <= 0 ? "Now" : `${minutes} min`
+  };
+});
 
     return res.status(200).json({
       stopId,
