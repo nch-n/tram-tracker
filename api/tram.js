@@ -11,14 +11,14 @@ module.exports = async function handler(req, res) {
       return res.status(500).json({ error: "Missing API keys" });
     }
 
-    const endpoint = `/v3/departures/route_type/1/stop/${stopId}`;
+    const endpoint = `/v3/departures/route_type/1/stop/${stopId}?devid=${devId}`;
 
     const signature = crypto
       .createHmac("sha1", apiKey)
       .update(endpoint)
       .digest("hex");
 
-    const url = `https://timetableapi.ptv.vic.gov.au${endpoint}?devid=${devId}&signature=${signature}`;
+    const url = `https://timetableapi.ptv.vic.gov.au${endpoint}&signature=${signature}`;
 
     const response = await fetch(url);
 
