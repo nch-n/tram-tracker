@@ -166,3 +166,12 @@ module.exports = async function handler(req, res) {
     });
   }
 };
+return res.status(200).json({
+  title: "?? Next Tram",
+  items: trams.map((t, i) => ({
+    title: i === 0 ? `?? ${t.line}  ${t.destination}` : `${t.line}  ${t.destination}`,
+    subtitle: i === 0 ? "Leaving soon" : "",
+    right: t.eta,
+    emphasis: i === 0 ? "high" : "low"
+  }))
+});
