@@ -107,22 +107,22 @@ module.exports = async function handler(req, res) {
         // ? direction-aware destination from route_name
 let destination = "Unknown";
 
-// ? get direction info properly
-let direction = null;
+if (route?.route_name) {
+  const parts = route.route_name.split(" - ");
 
-if (data.directions) {
-  const directionsArray = Array.isArray(data.directions)
-    ? data.directions
-    : Object.values(data.directions);
+  if (parts.length === 2) {
+    const [endA, endB] = parts;
 
-  direction = directionsArray.find(
-    d => d.direction_id === dep.direction_id
-  );
-}
-
-// ? use real direction name
-if (direction?.direction_name) {
-  destination = direction.direction_name;
+    // ? handle direction_id safely
+    if (dep.direction_id === 0) {
+      destination = endB;
+    } else if (dep.direction_id === 1) {
+      destination = endA;
+    } else {
+      // fallback if weird direction_id
+      destination = endA;
+    }
+  }
 }
         // ? clean text
         destination = destination
