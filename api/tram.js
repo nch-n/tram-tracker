@@ -24,10 +24,15 @@ module.exports = async function handler(req, res) {
     const response = await fetch(url);
     const text = await response.text();
 
-    let data;
-    try {
-      data = JSON.parse(text);
-    } catch (e) {
+let data;
+try {
+  data = JSON.parse(text);
+
+  console.log("ROUTES DEBUG:");
+  console.log(JSON.stringify(data.routes, null, 2));
+
+} catch (e) {
+
       console.error("Invalid JSON:", text);
       return res.status(500).json({
         error: "Invalid JSON from PTV",
