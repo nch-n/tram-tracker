@@ -148,7 +148,7 @@ module.exports = async function handler(req, res) {
       items: trams.map((t, i) => ({
         title:
           i === 0
-            ? `?? ${t.line} ${t.destination}`
+            ? `${t.line} ${t.destination}`
             : `${t.line} ${t.destination}`,
         right: t.eta
       }))
