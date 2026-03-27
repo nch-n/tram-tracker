@@ -11,7 +11,7 @@ module.exports = async function handler(req, res) {
       return res.status(500).json({ error: "Missing API keys" });
     }
 
-    // ? Correct endpoint for trams + include run data
+    // ? Tram endpoint + include run data
     const endpoint = `/v3/departures/route_type/1/stop/${stopId}?max_results=5&expand=run&devid=${devId}`;
 
     const signature = crypto
@@ -24,15 +24,10 @@ module.exports = async function handler(req, res) {
     const response = await fetch(url);
     const text = await response.text();
 
-let data;
-try {
-  data = JSON.parse(text);
-
-  console.log("ROUTES DEBUG:");
-  console.log(JSON.stringify(data.routes, null, 2));
-
-} catch (e) {
-
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
       console.error("Invalid JSON:", text);
       return res.status(500).json({
         error: "Invalid JSON from PTV",
@@ -62,29 +57,35 @@ try {
           (departureTime - new Date()) / 60000
         );
 
-let route;
+        // ? UNIVERSAL route lookup (handles ALL PTV formats)
+        let route = null;
 
-if (Array.isArray(data.routes)) {
-  route = data.routes.find(r => r.route_id === dep.route_id);
-} else {
-  route =
-    data.routes?.[dep.route_id] ||
-    data.routes?.[String(dep.route_id)];
-}
+        if (data.routes) {
+          const routesArray = Array.isArray(data.routes)
+            ? data.routes
+            : Object.values(data.routes);
 
-const line = route?.route_number || dep.route_id;
-        // ? DESTINATION FROM RUNS
-        const run =
-          data.runs?.[dep.run_id] ||
-          data.runs?.[String(dep.run_id)];
+          route = routesArray.find(r => r.route_id === dep.route_id);
+        }
+
+        const line = route?.route_number || dep.route_id;
+
+        // ? destination from runs
+        let run = null;
+
+        if (data.runs) {
+          run =
+            data.runs[dep.run_id] ||
+            data.runs[String(dep.run_id)];
+        }
 
         let destination = run?.destination_name || "Unknown";
 
-        // ? CLEAN DESTINATION TEXT
+        // ? clean destination text
         if (typeof destination === "string") {
           destination = destination
-            .split("/")[0]          // remove cross street
-            .replace(/#\d+/, "")   // remove stop number
+            .split("/")[0]
+            .replace(/#\d+/, "")
             .replace(" Railway Station", "")
             .replace(" Street", " St")
             .replace(" Avenue", " Ave")
