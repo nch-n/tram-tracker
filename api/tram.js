@@ -13,7 +13,7 @@ module.exports = async function handler(req, res) {
     }
 
     // ? route_type=1 (PTV quirk that works)
-    const endpoint = `/v3/departures/route_type/0/stop/${stopId}?max_results=5&expand=run&devid=${devId}`;
+    const endpoint = `/v3/departures/route_type/1/stop/${stopId}?max_results=5&expand=run&devid=${devId}`;
 
     const signature = crypto
       .createHmac("sha1", apiKey)
