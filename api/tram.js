@@ -76,7 +76,7 @@ module.exports = async function handler(req, res) {
       return res.status(500).json({ error: "Missing API keys" });
     }
 
-    // ? Get departures
+    // ? departures
     const endpoint = `/v3/departures/route_type/1/stop/${stopId}?max_results=5&expand=run&devid=${devId}`;
 
     const signature = crypto
@@ -96,10 +96,10 @@ module.exports = async function handler(req, res) {
     // ?? unique route IDs
     const routeIds = [...new Set(departures.map(d => d.route_id))];
 
-    // ?? fetch all route + direction data in parallel
     const routeMap = {};
     const directionMap = {};
 
+    // ?? fetch route + direction data
     await Promise.all(
       routeIds.map(async routeId => {
         const [route, directions] = await Promise.all([
@@ -112,55 +112,60 @@ module.exports = async function handler(req, res) {
       })
     );
 
-    // ?? build response
+    // ?? build tram list
     const trams = departures.slice(0, 5).map(dep => {
-      try {
-        const departureTime = new Date(
-          dep.estimated_departure_utc || dep.scheduled_departure_utc
-        );
+      const departureTime = new Date(
+        dep.estimated_departure_utc || dep.scheduled_departure_utc
+      );
 
-        const minutes = Math.round(
-          (departureTime - new Date()) / 60000
-        );
+      const minutes = Math.round(
+        (departureTime - new Date()) / 60000
+      );
 
-        const route = routeMap[dep.route_id];
-        const directions = directionMap[dep.route_id] || [];
+      const route = routeMap[dep.route_id];
+      const directions = directionMap[dep.route_id] || [];
 
-        const direction = directions.find(
-          d => d.direction_id === dep.direction_id
-        );
+      const direction = directions.find(
+        d => d.direction_id === dep.direction_id
+      );
 
-        const line = route?.route_number || dep.route_id;
+      const line = route?.route_number || dep.route_id;
 
-        let destination = direction?.direction_name || "Unknown";
+      let destination = direction?.direction_name || "Unknown";
 
-        // ? clean text
-        destination = destination
-          .replace(" Railway Station", "")
-          .replace(" Street", " St")
-          .replace(" Avenue", " Ave")
-          .trim();
+      // ? clean destination
+      destination = destination
+        .replace(" Railway Station", "")
+        .replace(" Street", " St")
+        .replace(" Avenue", " Ave")
+        .trim();
 
-        return {
-          line,
-          destination,
-          eta: minutes <= 0 ? "Now" : `${minutes} min`
-        };
+      // ? nicer ETA labels
+      let eta = `${minutes} min`;
+      if (minutes <= 0) eta = "Now";
+      else if (minutes <= 1) eta = "?? Now";
+      else if (minutes <= 3) eta = "Soon";
 
-      } catch (err) {
-        console.error("Mapping error:", err);
-        return null;
-      }
-    }).filter(Boolean);
+      return { line, destination, eta };
+    });
 
+    // ?? TRMNL DISPLAY FORMAT
+    return res.status(200).json({
+      title: "?? Next Tram",
+      items: trams.map((t, i) => ({
+        title:
+          i === 0
+            ? `?? ${t.line}  ${t.destination}`
+            : `${t.line}  ${t.destination}`,
+        subtitle: i === 0 ? "Leaving soon" : "",
+        right: t.eta
+      }))
+    });
 
-return res.status(200).json({
-  title: "?? Next Tram",
-  items: trams.map((t, i) => ({
-    title: i === 0
-      ? `?? ${t.line}  ${t.destination}`
-      : `${t.line}  ${t.destination}`,
-    subtitle: i === 0 ? "Leaving soon" : "",
-    right: t.eta
-  }))
-});
+  } catch (err) {
+    console.error("SERVER ERROR:", err);
+    return res.status(500).json({
+      error: err.message
+    });
+  }
+};
