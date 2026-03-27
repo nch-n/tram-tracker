@@ -2,8 +2,7 @@ const crypto = require("crypto");
 
 module.exports = async function handler(req, res) {
   try {
-    // ?? pass ?stop=XXXX or fallback
-    const stopId = req.query.stop || "1322";
+    const stopId = req.query.stop || "3148";
 
     const devId = process.env.PTV_DEV_ID;
     const apiKey = process.env.PTV_API_KEY;
@@ -12,7 +11,7 @@ module.exports = async function handler(req, res) {
       return res.status(500).json({ error: "Missing API keys" });
     }
 
-    // ? route_type=1 (PTV quirk that works)
+    // ? Correct tram route_type + expand runs for destination
     const endpoint = `/v3/departures/route_type/1/stop/${stopId}?max_results=5&expand=run&devid=${devId}`;
 
     const signature = crypto
@@ -29,9 +28,9 @@ module.exports = async function handler(req, res) {
     try {
       data = JSON.parse(text);
     } catch (e) {
-      console.error("PTV returned non-JSON:", text);
+      console.error("PTV NON JSON:", text);
       return res.status(500).json({
-        error: "PTV returned non-JSON",
+        error: "Invalid JSON from PTV",
         raw: text
       });
     }
@@ -43,46 +42,55 @@ module.exports = async function handler(req, res) {
       });
     }
 
-const trams = (data.departures || []).slice(0, 5).map(dep => {
-  const departureTime = new Date(
-    dep.estimated_departure_utc || dep.scheduled_departure_utc
-  );
+    const departures = Array.isArray(data.departures)
+      ? data.departures
+      : [];
 
-  const minutes = Math.round((departureTime - new Date()) / 60000);
+    const trams = departures.slice(0, 5).map(dep => {
+      try {
+        const departureTime = new Date(
+          dep.estimated_departure_utc || dep.scheduled_departure_utc
+        );
 
-  // ? route lookup
-  let route;
-  if (Array.isArray(data.routes)) {
-    route = data.routes.find(r => r.route_id === dep.route_id);
-  } else {
-    route = data.routes?.[dep.route_id];
-  }
+        const minutes = Math.round(
+          (departureTime - new Date()) / 60000
+        );
 
-const route =
-  data.routes?.[dep.route_id] ||
-  data.routes?.[String(dep.route_id)];
+        // ? SAFE route lookup (handles string/number keys)
+        const route =
+          data.routes?.[dep.route_id] ||
+          data.routes?.[String(dep.route_id)];
 
-const line = route?.route_number || dep.route_id;
+        const line = route?.route_number || dep.route_id;
 
-  // ? destination from runs (already working)
-  const run = data.runs?.[dep.run_id];
-  let destination = run?.destination_name || "Unknown";
+        // ? SAFE run lookup
+        const run =
+          data.runs?.[dep.run_id] ||
+          data.runs?.[String(dep.run_id)];
 
-  // ?? CLEAN UP destination text
-  if (destination) {
-    destination = destination
-      .split("/")[0]       // remove secondary street
-      .replace(/#\d+/, "") // remove stop number
-      .trim();
-  }
+        let destination = run?.destination_name || "Unknown";
 
-  return {
-    line,
-    destination,
-    eta: minutes <= 0 ? "Now" : `${minutes} min`
-  };
-});
+        // ? Clean destination text
+        if (destination && typeof destination === "string") {
+          destination = destination
+            .split("/")[0]
+            .replace(/#\d+/, "")
+            .replace(" Railway Station", "")
+            .replace(" Street", " St")
+            .replace(" Avenue", " Ave")
+            .trim();
+        }
 
+        return {
+          line,
+          destination,
+          eta: minutes <= 0 ? "Now" : `${minutes} min`
+        };
+      } catch (innerErr) {
+        console.error("Mapping error:", innerErr);
+        return null;
+      }
+    }).filter(Boolean);
 
     return res.status(200).json({
       stopId,
