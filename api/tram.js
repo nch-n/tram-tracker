@@ -1,6 +1,6 @@
 const crypto = require("crypto");
 
-// caches
+// simple in-memory caches
 const routeCache = {};
 const directionCache = {};
 
@@ -76,7 +76,10 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    const endpoint = `/v3/departures/route_type/1/stop/${stopId}?max_results=5&expand=run&devid=${devId}`;
+    // --------------------
+    // FETCH DEPARTURES
+    // --------------------
+    const endpoint = `/v3/departures/route_type/1/stop/${stopId}?max_results=6&expand=run&devid=${devId}`;
 
     const signature = crypto
       .createHmac("sha1", apiKey)
@@ -92,6 +95,9 @@ module.exports = async function handler(req, res) {
       ? data.departures
       : [];
 
+    // --------------------
+    // FETCH ROUTES + DIRECTIONS
+    // --------------------
     const routeIds = [...new Set(departures.map(d => d.route_id))];
 
     const routeMap = {};
@@ -109,7 +115,10 @@ module.exports = async function handler(req, res) {
       })
     );
 
-    const trams = departures.slice(0, 5).map(dep => {
+    // --------------------
+    // BUILD ITEMS
+    // --------------------
+    const items = departures.slice(0, 6).map(dep => {
       const departureTime = new Date(
         dep.estimated_departure_utc || dep.scheduled_departure_utc
       );
@@ -129,36 +138,30 @@ module.exports = async function handler(req, res) {
 
       let destination = direction?.direction_name || "Unknown";
 
+      // clean names
       destination = destination
         .replace(" Railway Station", "")
         .replace(" Street", " St")
         .replace(" Avenue", " Ave")
         .trim();
 
+      // nicer ETA
       let eta = `${minutes} min`;
       if (minutes <= 0) eta = "Now";
       else if (minutes <= 1) eta = "Now";
       else if (minutes <= 3) eta = "Soon";
 
-return {
-  line,
-  destination,
-  eta,
-  directionId: dep.direction_id
-};
-
+      return {
+        title: `${line} ${destination}`,
+        right: eta,
+        directionId: dep.direction_id
+      };
     });
 
-    // ? TRMNL SAFE OUTPUT
-    return res.status(200).json({
-      items: trams.map((t, i) => ({
-        title:
-          i === 0
-            ? `${t.line} ${t.destination}`
-            : `${t.line} ${t.destination}`,
-        right: t.eta
-      }))
-    });
+    // --------------------
+    // RETURN FOR TRMNL
+    // --------------------
+    return res.status(200).json({ items });
 
   } catch (err) {
     console.error("SERVER ERROR:", err);
