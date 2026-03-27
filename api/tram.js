@@ -68,7 +68,10 @@ module.exports = async function handler(req, res) {
           route = routesArray.find(r => r.route_id === dep.route_id);
         }
 
-        const line = route?.route_number || dep.route_id;
+const line =
+  route?.route_number ||
+  String(dep.route_id - 830);
+
 
         // ? destination from runs
         let run = null;
