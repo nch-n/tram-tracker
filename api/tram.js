@@ -105,18 +105,21 @@ module.exports = async function handler(req, res) {
         const line = route?.route_number || dep.route_id;
 
         // ? direction-aware destination from route_name
-        let destination = "Unknown";
+let destination = "Unknown";
 
-        if (route?.route_name) {
-          const parts = route.route_name.split(" - ");
+const run =
+  data.runs?.[dep.run_id] ||
+  data.runs?.[String(dep.run_id)];
 
-          if (parts.length === 2) {
-            destination =
-              dep.direction_id === 0
-                ? parts[1]
-                : parts[0];
-          }
-        }
+if (run?.destination_name) {
+  destination = run.destination_name
+    .split("/")[0]            // remove cross street
+    .replace(/#\d+/, "")     // remove stop number
+    .replace(" Railway Station", "")
+    .replace(" Street", " St")
+    .replace(" Avenue", " Ave")
+    .trim();
+}
 
         // ? clean text
         destination = destination
