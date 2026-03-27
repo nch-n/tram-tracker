@@ -4,7 +4,7 @@ export default async function handler(req, res) {
   const devId = process.env.3003776;
   const apiKey = process.env.ee7cf278-7cf6-494c-9d15-ada3f62e952e;
 
-  const crypto = require("crypto");
+  import crypto from "crypto";
 
   const endpoint = `/v3/departures/route_type/1/stop/${2322}`;
   const signature = crypto
