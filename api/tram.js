@@ -28,22 +28,22 @@ module.exports = async function handler(req, res) {
 
     const data = await response.json();
 
-    const trams = data.departures.slice(0, 3).map(dep => {
-      const departureTime = new Date(
-        dep.estimated_departure_utc || dep.scheduled_departure_utc
-      );
+const trams = data.departures.slice(0, 5).map(dep => {
+  const departureTime = new Date(
+    dep.estimated_departure_utc || dep.scheduled_departure_utc
+  );
 
-      const minutes = Math.round((departureTime - new Date()) / 60000);
+  const minutes = Math.round((departureTime - new Date()) / 60000);
 
-      return {
-        line: dep.route_name,
-        destination: dep.direction_name,
-        eta: minutes <= 0 ? "Now" : `${minutes} min`
-      };
-    });
+  return {
+    line: dep.route_id,
+    destination: dep.direction_id,
+    eta: minutes <= 0 ? "Now" : `${minutes} min`
+  };
+});
 
     return res.status(200).json({
-      stopName: data.stops?.[0]?.stop_name || "Unknown stop",
+stopName: data.departures?.[0]?.stop_id || "Unknown stop",
       trams
     });
 
