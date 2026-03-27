@@ -111,14 +111,24 @@ const run =
   data.runs?.[dep.run_id] ||
   data.runs?.[String(dep.run_id)];
 
-if (run?.destination_name) {
-  destination = run.destination_name
-    .split("/")[0]            // remove cross street
-    .replace(/#\d+/, "")     // remove stop number
-    .replace(" Railway Station", "")
-    .replace(" Street", " St")
-    .replace(" Avenue", " Ave")
-    .trim();
+if (route?.route_name && run?.destination_name) {
+  const parts = route.route_name.split(" - ");
+
+  if (parts.length === 2) {
+    const [endA, endB] = parts;
+
+    const runDest = run.destination_name.toLowerCase();
+
+    // ?? match which terminus the run is heading toward
+    if (runDest.includes(endA.toLowerCase())) {
+      destination = endA;
+    } else if (runDest.includes(endB.toLowerCase())) {
+      destination = endB;
+    } else {
+      // fallback if matching fails
+      destination = endA;
+    }
+  }
 }
 
         // ? clean text
