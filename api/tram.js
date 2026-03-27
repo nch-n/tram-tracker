@@ -22,9 +22,14 @@ module.exports = async function handler(req, res) {
 
     const response = await fetch(url);
 
-    if (!response.ok) {
-      throw new Error("PTV API failed");
-    }
+const text = await response.text();
+console.log("PTV RAW:", text);
+
+if (!response.ok) {
+  throw new Error(text);
+}
+
+const data = JSON.parse(text);
 
     const data = await response.json();
 
