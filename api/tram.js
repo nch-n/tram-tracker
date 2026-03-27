@@ -151,12 +151,10 @@ module.exports = async function handler(req, res) {
 
     // ?? TRMNL DISPLAY FORMAT
 return res.status(200).json({
-  items: trams.map((t, i) => ({
-    title: i === 0
-      ? `?? ${t.line}  ${t.destination}`
-      : `${t.line}  ${t.destination}`,
-    right: t.eta
-  }))
+  items: [
+    { title: "Test tram 1" },
+    { title: "Test tram 2" }
+  ]
 });
 
   } catch (err) {
