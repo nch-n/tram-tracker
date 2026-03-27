@@ -1,5 +1,30 @@
 const crypto = require("crypto");
 
+// simple in-memory cache (persists across Vercel invocations briefly)
+const routeCache = {};
+
+async function getRoute(routeId, devId, apiKey) {
+  if (routeCache[routeId]) return routeCache[routeId];
+
+  const endpoint = `/v3/routes/${routeId}?devid=${devId}`;
+
+  const signature = crypto
+    .createHmac("sha1", apiKey)
+    .update(endpoint)
+    .digest("hex");
+
+  const url = `https://timetableapi.ptv.vic.gov.au${endpoint}&signature=${signature}`;
+
+  const res = await fetch(url);
+  const data = await res.json();
+
+  const routeNumber = data?.route?.route_number;
+
+  routeCache[routeId] = routeNumber;
+
+  return routeNumber;
+}
+
 module.exports = async function handler(req, res) {
   try {
     const stopId = req.query.stop || "3148";
@@ -11,7 +36,6 @@ module.exports = async function handler(req, res) {
       return res.status(500).json({ error: "Missing API keys" });
     }
 
-    // ? Tram endpoint + include run data
     const endpoint = `/v3/departures/route_type/1/stop/${stopId}?max_results=5&expand=run&devid=${devId}`;
 
     const signature = crypto
@@ -22,95 +46,62 @@ module.exports = async function handler(req, res) {
     const url = `https://timetableapi.ptv.vic.gov.au${endpoint}&signature=${signature}`;
 
     const response = await fetch(url);
-    const text = await response.text();
-
-    let data;
-    try {
-      data = JSON.parse(text);
-    } catch (e) {
-      console.error("Invalid JSON:", text);
-      return res.status(500).json({
-        error: "Invalid JSON from PTV",
-        raw: text
-      });
-    }
-
-    if (!response.ok) {
-      return res.status(500).json({
-        error: "PTV API error",
-        details: data
-      });
-    }
+    const data = await response.json();
 
     const departures = Array.isArray(data.departures)
       ? data.departures
       : [];
 
-    const trams = departures.slice(0, 5).map(dep => {
-      try {
-        // ? ETA
-        const departureTime = new Date(
-          dep.estimated_departure_utc || dep.scheduled_departure_utc
-        );
+    const trams = await Promise.all(
+      departures.slice(0, 5).map(async dep => {
+        try {
+          const departureTime = new Date(
+            dep.estimated_departure_utc || dep.scheduled_departure_utc
+          );
 
-        const minutes = Math.round(
-          (departureTime - new Date()) / 60000
-        );
+          const minutes = Math.round(
+            (departureTime - new Date()) / 60000
+          );
 
-        // ? UNIVERSAL route lookup (handles ALL PTV formats)
-        let route = null;
+          // ? REAL route lookup
+          const line =
+            (await getRoute(dep.route_id, devId, apiKey)) ||
+            dep.route_id;
 
-        if (data.routes) {
-          const routesArray = Array.isArray(data.routes)
-            ? data.routes
-            : Object.values(data.routes);
+          // ? destination from runs
+          const run =
+            data.runs?.[dep.run_id] ||
+            data.runs?.[String(dep.run_id)];
 
-          route = routesArray.find(r => r.route_id === dep.route_id);
+          let destination = run?.destination_name || "Unknown";
+
+          if (typeof destination === "string") {
+            destination = destination
+              .split("/")[0]
+              .replace(/#\d+/, "")
+              .replace(" Railway Station", "")
+              .replace(" Street", " St")
+              .replace(" Avenue", " Ave")
+              .trim();
+          }
+
+          return {
+            line,
+            destination,
+            eta: minutes <= 0 ? "Now" : `${minutes} min`
+          };
+
+        } catch (err) {
+          console.error("Mapping error:", err);
+          return null;
         }
-
-const line =
-  route?.route_number ||
-  String(dep.route_id - 830);
-
-
-        // ? destination from runs
-        let run = null;
-
-        if (data.runs) {
-          run =
-            data.runs[dep.run_id] ||
-            data.runs[String(dep.run_id)];
-        }
-
-        let destination = run?.destination_name || "Unknown";
-
-        // ? clean destination text
-        if (typeof destination === "string") {
-          destination = destination
-            .split("/")[0]
-            .replace(/#\d+/, "")
-            .replace(" Railway Station", "")
-            .replace(" Street", " St")
-            .replace(" Avenue", " Ave")
-            .trim();
-        }
-
-        return {
-          line,
-          destination,
-          eta: minutes <= 0 ? "Now" : `${minutes} min`
-        };
-
-      } catch (err) {
-        console.error("Mapping error:", err);
-        return null;
-      }
-    }).filter(Boolean);
+      })
+    );
 
     return res.status(200).json({
       stopId,
-      tramCount: trams.length,
-      trams
+      tramCount: trams.filter(Boolean).length,
+      trams: trams.filter(Boolean)
     });
 
   } catch (err) {
