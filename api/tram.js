@@ -43,33 +43,42 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    const trams = (data.departures || []).slice(0, 5).map(dep => {
-      const departureTime = new Date(
-        dep.estimated_departure_utc || dep.scheduled_departure_utc
-      );
+const trams = (data.departures || []).slice(0, 5).map(dep => {
+  const departureTime = new Date(
+    dep.estimated_departure_utc || dep.scheduled_departure_utc
+  );
 
-      const minutes = Math.round((departureTime - new Date()) / 60000);
+  const minutes = Math.round((departureTime - new Date()) / 60000);
 
-      // ? route lookup (handles array OR object)
-      let route;
-      if (Array.isArray(data.routes)) {
-        route = data.routes.find(r => r.route_id === dep.route_id);
-      } else {
-        route = data.routes?.[dep.route_id];
-      }
+  // ? route lookup
+  let route;
+  if (Array.isArray(data.routes)) {
+    route = data.routes.find(r => r.route_id === dep.route_id);
+  } else {
+    route = data.routes?.[dep.route_id];
+  }
 
-      const line = route?.route_number || dep.route_id;
+  const line = route?.route_number || dep.route_id;
 
-      // ? CRITICAL: destination comes from runs via run_id
-      const run = data.runs?.[dep.run_id];
-      const destination = run?.destination_name || "Unknown";
+  // ? destination from runs (already working)
+  const run = data.runs?.[dep.run_id];
+  let destination = run?.destination_name || "Unknown";
 
-      return {
-        line,
-        destination,
-        eta: minutes <= 0 ? "Now" : `${minutes} min`
-      };
-    });
+  // ?? CLEAN UP destination text
+  if (destination) {
+    destination = destination
+      .split("/")[0]       // remove secondary street
+      .replace(/#\d+/, "") // remove stop number
+      .trim();
+  }
+
+  return {
+    line,
+    destination,
+    eta: minutes <= 0 ? "Now" : `${minutes} min`
+  };
+});
+
 
     return res.status(200).json({
       stopId,
