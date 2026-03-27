@@ -2,12 +2,11 @@ module.exports = async function handler(req, res) {
   const { method, query } = req;
 
   // ------------------------
-  // INSTALL FLOW (CORRECT)
+  // INSTALL FLOW
   // ------------------------
   if (query.installation_callback_url) {
     const redirectUrl = new URL(query.installation_callback_url);
 
-    // REQUIRED params
     redirectUrl.searchParams.set("external_user_id", "tram-user-1");
     redirectUrl.searchParams.set("api_key", "tram-demo-key");
 
@@ -22,16 +21,24 @@ module.exports = async function handler(req, res) {
   }
 
   // ------------------------
-  // MANAGEMENT PAGE
+  // CONFIG / VIEW (IMPORTANT FIX)
   // ------------------------
-  res.setHeader("Content-Type", "text/html");
+  if (query.uuid && query.jwt) {
+    res.setHeader("Content-Type", "text/html");
 
-  return res.send(`
-    <html>
-      <body style="font-family: sans-serif; padding: 20px;">
-        <h1>?? Tram Tracker</h1>
-        <p>Plugin installed successfully.</p>
-      </body>
-    </html>
-  `);
+    return res.send(`
+      <html>
+        <body style="font-family: sans-serif; padding: 20px;">
+          <h2>?? Tram Tracker</h2>
+          <p>This plugin is active.</p>
+          <p>No configuration needed.</p>
+        </body>
+      </html>
+    `);
+  }
+
+  // ------------------------
+  // DEFAULT
+  // ------------------------
+  return res.status(200).json({ ok: true });
 };
