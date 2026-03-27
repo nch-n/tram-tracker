@@ -12,7 +12,7 @@ module.exports = async function handler(req, res) {
       return res.status(500).json({ error: "Missing API keys" });
     }
 
-    // ? route_type=0 (PTV quirk that works)
+    // ? route_type=1 (PTV quirk that works)
     const endpoint = `/v3/departures/route_type/0/stop/${stopId}?max_results=5&expand=run&devid=${devId}`;
 
     const signature = crypto
