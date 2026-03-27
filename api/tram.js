@@ -57,13 +57,17 @@ module.exports = async function handler(req, res) {
           (departureTime - new Date()) / 60000
         );
 
-        // ? ROUTE LOOKUP (fix for 887 ? 57)
-        const route =
-          data.routes?.[dep.route_id] ||
-          data.routes?.[String(dep.route_id)];
+let route;
 
-        const line = route?.route_number || dep.route_id;
+if (Array.isArray(data.routes)) {
+  route = data.routes.find(r => r.route_id === dep.route_id);
+} else {
+  route =
+    data.routes?.[dep.route_id] ||
+    data.routes?.[String(dep.route_id)];
+}
 
+const line = route?.route_number || dep.route_id;
         // ? DESTINATION FROM RUNS
         const run =
           data.runs?.[dep.run_id] ||
